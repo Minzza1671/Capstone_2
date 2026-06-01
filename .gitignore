@@ -1,0 +1,16 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# 분석 출력물
+cctv_crowd_dashboard(2)/cctv_crowd_dashboard(2)/analyzer/outputs/
+
+# 모델 파일 (용량 큼)
+*.pt
+
+# 영상 파일
+*.mp4
+*.avi
+*.mov
