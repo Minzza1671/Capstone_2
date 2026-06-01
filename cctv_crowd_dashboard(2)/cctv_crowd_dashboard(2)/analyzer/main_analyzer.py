@@ -164,7 +164,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--head-model", default=str(PROJECT_ROOT / "models" / "ccrv_head_v5.pt"))
     parser.add_argument("--body-model", default=str(PROJECT_ROOT / "models" / "body_wider_labeling.pt"))
-    parser.add_argument("--video", default=str(PROJECT_ROOT / "data" / "test.mp4"))
+    parser.add_argument("--video", default=str(PROJECT_ROOT / "data" / "aoaoao.mp4"))
     parser.add_argument("--camera-id", default="cam_001")
     parser.add_argument("--max-display-width", type=int, default=1280)
     parser.add_argument("--skip-interactive-setup", action="store_true", help="Reuse saved ROI config without opening setup window.")
