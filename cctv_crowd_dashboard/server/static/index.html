@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CCTV 군중 대시보드</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: #0f1117; color: #e2e8f0; font-family: 'Segoe UI', sans-serif; padding: 24px; }
+
+    h1 { font-size: 1.4rem; font-weight: 600; color: #94a3b8; margin-bottom: 24px; letter-spacing: 0.05em; }
+
+    .cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 24px; }
+
+    .card {
+      background: #1e2130;
+      border-radius: 12px;
+      padding: 24px;
+      border: 1px solid #2d3148;
+    }
+    .card .label { font-size: 0.75rem; color: #64748b; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 8px; }
+    .card .value { font-size: 2.5rem; font-weight: 700; color: #f1f5f9; }
+
+    .status-bar {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      background: #1e2130;
+      border-radius: 12px;
+      padding: 16px 24px;
+      margin-bottom: 24px;
+      border: 1px solid #2d3148;
+    }
+    .status-dot { width: 12px; height: 12px; border-radius: 50%; }
+    .status-label { font-size: 0.8rem; color: #64748b; text-transform: uppercase; letter-spacing: 0.08em; }
+    .status-value { font-size: 1rem; font-weight: 600; margin-left: 4px; }
+
+    .status-NORMAL .status-dot { background: #22c55e; box-shadow: 0 0 8px #22c55e88; }
+    .status-NORMAL .status-value { color: #22c55e; }
+    .status-WARNING .status-dot { background: #f59e0b; box-shadow: 0 0 8px #f59e0b88; }
+    .status-WARNING .status-value { color: #f59e0b; }
+    .status-DANGER .status-dot { background: #ef4444; box-shadow: 0 0 8px #ef444488; }
+    .status-DANGER .status-value { color: #ef4444; }
+
+    .chart-box {
+      background: #1e2130;
+      border-radius: 12px;
+      padding: 24px;
+      border: 1px solid #2d3148;
+    }
+    .chart-box h2 { font-size: 0.8rem; color: #64748b; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 16px; }
+
+    .conn-status { position: fixed; top: 16px; right: 24px; font-size: 0.75rem; color: #64748b; }
+    .conn-status.connected { color: #22c55e; }
+    .conn-status.disconnected { color: #ef4444; }
+  </style>
+</head>
+<body>
+  <div class="conn-status disconnected" id="conn">● 연결 중...</div>
+
+  <h1>CCTV 군중 모니터링</h1>
+
+  <div class="status-bar status-NORMAL" id="status-bar">
+    <div class="status-dot"></div>
+    <span class="status-label">FLOW</span>
+    <span class="status-value" id="flow-status">NORMAL</span>
+  </div>
+
+  <div class="cards">
+    <div class="card">
+      <div class="label">현재 인원</div>
+      <div class="value" id="val-persons">—</div>
+    </div>
+    <div class="card">
+      <div class="label">총 입장 (IN)</div>
+      <div class="value" id="val-in">—</div>
+    </div>
+    <div class="card">
+      <div class="label">총 퇴장 (OUT)</div>
+      <div class="value" id="val-out">—</div>
+    </div>
+  </div>
+
+  <div class="chart-box">
+    <h2>ROI 인원 수 추이</h2>
+    <canvas id="chart" height="100"></canvas>
+  </div>
+
+  <script>
+    const MAX_POINTS = 300;
+    const labels = [];
+    const personData = [];
+
+    const ctx = document.getElementById('chart').getContext('2d');
+    const chart = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels,
+        datasets: [{
+          label: '인원 수',
+          data: personData,
+          borderColor: '#6366f1',
+          backgroundColor: '#6366f120',
+          borderWidth: 2,
+          pointRadius: 0,
+          fill: true,
+          tension: 0.3,
+        }]
+      },
+      options: {
+        animation: false,
+        responsive: true,
+        plugins: { legend: { display: false } },
+        scales: {
+          x: { display: false },
+          y: {
+            min: 0,
+            ticks: { color: '#64748b' },
+            grid: { color: '#2d3148' },
+          }
+        }
+      }
+    });
+
+    function deriveFlowStatus(rows) {
+      if (rows.length < 2) return 'NORMAL';
+      const window = rows.slice(-150);
+      let recentIn = 0, recentOut = 0;
+      for (let i = 1; i < window.length; i++) {
+        recentIn += window[i].in_count - window[i-1].in_count;
+        recentOut += window[i].out_count - window[i-1].out_count;
+      }
+      const diff = Math.abs(recentIn - recentOut);
+      if (diff >= 10) return 'DANGER';
+      if (diff >= 5) return 'WARNING';
+      return 'NORMAL';
+    }
+
+    function updateUI(rows) {
+      if (!rows.length) return;
+      const latest = rows[rows.length - 1];
+
+      document.getElementById('val-persons').textContent = latest.roi_person_count;
+      document.getElementById('val-in').textContent = latest.in_count;
+      document.getElementById('val-out').textContent = latest.out_count;
+
+      const status = deriveFlowStatus(rows);
+      document.getElementById('flow-status').textContent = status;
+      const bar = document.getElementById('status-bar');
+      bar.className = `status-bar status-${status}`;
+    }
+
+    function appendRows(rows) {
+      for (const row of rows) {
+        labels.push(row.frame_index);
+        personData.push(row.roi_person_count);
+      }
+      if (labels.length > MAX_POINTS) {
+        labels.splice(0, labels.length - MAX_POINTS);
+        personData.splice(0, personData.length - MAX_POINTS);
+      }
+      chart.update('none');
+    }
+
+    const allRows = [];
+
+    function connect() {
+      const ws = new WebSocket(`ws://${location.host}/ws`);
+      const connEl = document.getElementById('conn');
+
+      ws.onopen = () => {
+        connEl.textContent = '● 연결됨';
+        connEl.className = 'conn-status connected';
+      };
+
+      ws.onmessage = (e) => {
+        const msg = JSON.parse(e.data);
+        if (msg.type === 'init') {
+          allRows.length = 0;
+          labels.length = 0;
+          personData.length = 0;
+          allRows.push(...msg.rows);
+          appendRows(msg.rows);
+        } else if (msg.type === 'update') {
+          allRows.push(...msg.rows);
+          if (allRows.length > MAX_POINTS) allRows.splice(0, allRows.length - MAX_POINTS);
+          appendRows(msg.rows);
+        }
+        updateUI(allRows);
+      };
+
+      ws.onclose = () => {
+        connEl.textContent = '● 연결 끊김 — 재시도 중...';
+        connEl.className = 'conn-status disconnected';
+        setTimeout(connect, 2000);
+      };
+    }
+
+    connect();
+  </script>
+</body>
+</html>
