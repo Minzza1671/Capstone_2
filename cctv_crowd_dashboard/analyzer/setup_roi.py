@@ -85,7 +85,7 @@ class PolygonROIEditor:
 
         return display
 
-    def save(self):
+    def save(self, area_m2: float = 0.0):
         if len(self.points) < 3:
             raise ValueError("ROI needs at least 3 points.")
 
@@ -94,6 +94,7 @@ class PolygonROIEditor:
         data = {
             "camera_id": self.camera_id,
             "roi_name": self.roi_name,
+            "area_m2": area_m2,
             "points": [[int(x), int(y)] for x, y in self.points],
         }
 
@@ -138,7 +139,20 @@ class PolygonROIEditor:
                     print(f"[ERROR] {e}")
 
         cv2.destroyWindow(self.window_name)
+
+        if self.saved:
+            area_m2 = self._prompt_area()
+            self.save(area_m2=area_m2)
+
         return self.saved
+
+    def _prompt_area(self) -> float:
+        while True:
+            try:
+                val = input("[INPUT] ROI 실제 면적(m²)을 입력하세요 (모르면 0): ").strip()
+                return float(val)
+            except ValueError:
+                print("[ERROR] 숫자만 입력하세요.")
 
 
 def run_roi_editor_on_frame(

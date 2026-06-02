@@ -29,6 +29,18 @@ def _start_analyzer():
     parser = build_arg_parser()
     args = parser.parse_args([])
     args.show = False
+
+    from pathlib import Path as _Path
+    video_path = _Path(args.video)
+    roi_path = _Path(args.roi) if args.roi else (
+        _Path(__file__).resolve().parents[1] / "analyzer" / "configs" / f"{video_path.stem}_roi.json"
+    )
+
+    if not roi_path.exists():
+        print(f"[SERVER] ROI config not found: {roi_path}")
+        print("[SERVER] Run 'python main_analyzer.py' first to set up ROI, then restart the server.")
+        return
+
     args.skip_interactive_setup = True
 
     try:
