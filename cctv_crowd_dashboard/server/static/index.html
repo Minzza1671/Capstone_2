@@ -14,23 +14,14 @@
     .layout { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
 
     .video-panel {
-      background: #1e2130;
-      border-radius: 12px;
-      border: 1px solid #2d3148;
-      overflow: hidden;
-      display: flex;
-      flex-direction: column;
+      background: #1e2130; border-radius: 12px; border: 1px solid #2d3148;
+      overflow: hidden; display: flex; flex-direction: column;
     }
     .video-panel .panel-title {
       font-size: 0.75rem; color: #64748b; text-transform: uppercase;
       letter-spacing: 0.08em; padding: 12px 16px; border-bottom: 1px solid #2d3148;
     }
-    .video-panel img {
-      width: 100%;
-      display: block;
-      background: #0f1117;
-      min-height: 240px;
-    }
+    .video-panel img { width: 100%; display: block; background: #0f1117; min-height: 240px; }
     .video-panel .no-feed {
       display: flex; align-items: center; justify-content: center;
       min-height: 240px; color: #334155; font-size: 0.85rem;
@@ -38,43 +29,39 @@
 
     .dashboard { display: flex; flex-direction: column; gap: 16px; }
 
-    .cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+    .cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
 
     .card {
-      background: #1e2130;
-      border-radius: 12px;
-      padding: 20px;
-      border: 1px solid #2d3148;
+      background: #1e2130; border-radius: 12px; padding: 16px; border: 1px solid #2d3148;
     }
     .card .label { font-size: 0.7rem; color: #64748b; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 6px; }
-    .card .value { font-size: 2rem; font-weight: 700; color: #f1f5f9; }
+    .card .value { font-size: 1.8rem; font-weight: 700; color: #f1f5f9; }
+    .card .value.small { font-size: 1.2rem; }
 
     .status-bar {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      background: #1e2130;
-      border-radius: 12px;
-      padding: 14px 20px;
-      border: 1px solid #2d3148;
+      display: flex; align-items: center; gap: 12px;
+      background: #1e2130; border-radius: 12px; padding: 14px 20px; border: 1px solid #2d3148;
     }
     .status-dot { width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0; }
     .status-label { font-size: 0.8rem; color: #64748b; text-transform: uppercase; letter-spacing: 0.08em; }
     .status-value { font-size: 1rem; font-weight: 600; margin-left: 4px; }
+    .status-score { font-size: 0.8rem; color: #64748b; margin-left: auto; }
 
-    .status-NORMAL .status-dot { background: #22c55e; box-shadow: 0 0 8px #22c55e88; }
-    .status-NORMAL .status-value { color: #22c55e; }
-    .status-WARNING .status-dot { background: #f59e0b; box-shadow: 0 0 8px #f59e0b88; }
-    .status-WARNING .status-value { color: #f59e0b; }
-    .status-DANGER .status-dot { background: #ef4444; box-shadow: 0 0 8px #ef444488; }
-    .status-DANGER .status-value { color: #ef4444; }
+    .status-NORMAL   .status-dot { background: #22c55e; box-shadow: 0 0 8px #22c55e88; }
+    .status-NORMAL   .status-value { color: #22c55e; }
+    .status-CAUTION  .status-dot { background: #84cc16; box-shadow: 0 0 8px #84cc1688; }
+    .status-CAUTION  .status-value { color: #84cc16; }
+    .status-WARNING  .status-dot { background: #f59e0b; box-shadow: 0 0 8px #f59e0b88; }
+    .status-WARNING  .status-value { color: #f59e0b; }
+    .status-DANGER   .status-dot { background: #ef4444; box-shadow: 0 0 8px #ef444488; }
+    .status-DANGER   .status-value { color: #ef4444; }
+    .status-CRITICAL .status-dot { background: #7c3aed; box-shadow: 0 0 8px #7c3aed88; animation: pulse 1s infinite; }
+    .status-CRITICAL .status-value { color: #7c3aed; }
+
+    @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
 
     .chart-box {
-      background: #1e2130;
-      border-radius: 12px;
-      padding: 20px;
-      border: 1px solid #2d3148;
-      flex: 1;
+      background: #1e2130; border-radius: 12px; padding: 20px; border: 1px solid #2d3148; flex: 1;
     }
     .chart-box h2 { font-size: 0.75rem; color: #64748b; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 14px; }
 
@@ -84,7 +71,7 @@
 
     @media (max-width: 900px) {
       .layout { grid-template-columns: 1fr; }
-      .cards { grid-template-columns: repeat(3, 1fr); }
+      .cards { grid-template-columns: repeat(2, 1fr); }
     }
   </style>
 </head>
@@ -96,22 +83,26 @@
   <div class="layout">
     <div class="video-panel">
       <div class="panel-title">라이브 영상</div>
-      <img id="video-feed" src="/video_feed" alt="video feed"
-           onerror="this.style.display='none'; document.getElementById('no-feed').style.display='flex';" />
+      <img id="video-feed" alt="video feed" style="min-height:240px;" />
       <div class="no-feed" id="no-feed" style="display:none;">분석기 대기 중...</div>
     </div>
 
     <div class="dashboard">
       <div class="status-bar status-NORMAL" id="status-bar">
         <div class="status-dot"></div>
-        <span class="status-label">FLOW</span>
-        <span class="status-value" id="flow-status">NORMAL</span>
+        <span class="status-label">위험도</span>
+        <span class="status-value" id="risk-level">NORMAL</span>
+        <span class="status-score" id="risk-score">score: —</span>
       </div>
 
       <div class="cards">
         <div class="card">
           <div class="label">현재 인원</div>
           <div class="value" id="val-persons">—</div>
+        </div>
+        <div class="card">
+          <div class="label">밀도 (명/㎡)</div>
+          <div class="value small" id="val-density">—</div>
         </div>
         <div class="card">
           <div class="label">총 입장</div>
@@ -132,8 +123,7 @@
 
   <script>
     const MAX_POINTS = 300;
-    const labels = [];
-    const personData = [];
+    const labels = [], personData = [];
 
     const ctx = document.getElementById('chart').getContext('2d');
     const chart = new Chart(ctx, {
@@ -157,38 +147,29 @@
         plugins: { legend: { display: false } },
         scales: {
           x: { display: false },
-          y: {
-            min: 0,
-            ticks: { color: '#64748b' },
-            grid: { color: '#2d3148' },
-          }
+          y: { min: 0, ticks: { color: '#64748b' }, grid: { color: '#2d3148' } }
         }
       }
     });
 
-    function deriveFlowStatus(rows) {
-      if (rows.length < 2) return 'NORMAL';
-      const window = rows.slice(-150);
-      let recentIn = 0, recentOut = 0;
-      for (let i = 1; i < window.length; i++) {
-        recentIn += window[i].in_count - window[i-1].in_count;
-        recentOut += window[i].out_count - window[i-1].out_count;
-      }
-      const diff = Math.abs(recentIn - recentOut);
-      if (diff >= 10) return 'DANGER';
-      if (diff >= 5) return 'WARNING';
-      return 'NORMAL';
-    }
-
     function updateUI(rows) {
       if (!rows.length) return;
       const latest = rows[rows.length - 1];
-      document.getElementById('val-persons').textContent = latest.roi_person_count;
-      document.getElementById('val-in').textContent = latest.in_count;
-      document.getElementById('val-out').textContent = latest.out_count;
-      const status = deriveFlowStatus(rows);
-      document.getElementById('flow-status').textContent = status;
-      document.getElementById('status-bar').className = `status-bar status-${status}`;
+
+      document.getElementById('val-persons').textContent = latest.roi_person_count ?? '—';
+      document.getElementById('val-in').textContent = latest.in_count ?? '—';
+      document.getElementById('val-out').textContent = latest.out_count ?? '—';
+
+      const density = latest.density_per_m2;
+      document.getElementById('val-density').textContent =
+        (density && density > 0) ? density.toFixed(2) : '—';
+
+      const level = latest.risk_level || 'NORMAL';
+      const score = latest.risk_score;
+      document.getElementById('risk-level').textContent = level;
+      document.getElementById('risk-score').textContent =
+        score != null ? `score: ${score.toFixed(2)}` : 'score: —';
+      document.getElementById('status-bar').className = `status-bar status-${level}`;
     }
 
     function appendRows(rows) {
@@ -217,9 +198,7 @@
       ws.onmessage = (e) => {
         const msg = JSON.parse(e.data);
         if (msg.type === 'init') {
-          allRows.length = 0;
-          labels.length = 0;
-          personData.length = 0;
+          allRows.length = 0; labels.length = 0; personData.length = 0;
           allRows.push(...msg.rows);
           appendRows(msg.rows);
         } else if (msg.type === 'update') {
@@ -238,6 +217,34 @@
     }
 
     connect();
+
+    // 영상 폴링 (100ms) — blob URL로 이중 fetch 방지
+    const videoEl = document.getElementById('video-feed');
+    const noFeedEl = document.getElementById('no-feed');
+    let videoFails = 0;
+    setInterval(() => {
+      fetch('/snapshot?' + Date.now())
+        .then(r => {
+          if (r.status === 200) return r.blob();
+          return null;
+        })
+        .then(blob => {
+          if (blob && blob.size > 0) {
+            const prev = videoEl.src;
+            videoEl.src = URL.createObjectURL(blob);
+            if (prev.startsWith('blob:')) URL.revokeObjectURL(prev);
+            videoEl.style.display = 'block';
+            noFeedEl.style.display = 'none';
+            videoFails = 0;
+          } else {
+            if (++videoFails > 30) {
+              videoEl.style.display = 'none';
+              noFeedEl.style.display = 'flex';
+            }
+          }
+        })
+        .catch(() => { videoFails++; });
+    }, 100);
   </script>
 </body>
 </html>

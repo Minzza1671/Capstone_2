@@ -1,14 +1,11 @@
 import argparse
-import queue
 import time
 from collections import deque
 from pathlib import Path
 
 import cv2
 
-from modules.backend_client import BackendClient
 from modules.bytetrack_tracker import ByteTrackPersonTracker, HeadDetector
-from modules.db_logger import DBLogger
 from modules.roi_manager import ROIManager
 from setup_roi import run_roi_editor_on_frame
 
@@ -49,11 +46,9 @@ class ROIFlowCounter:
     이전 프레임에서 ROI 안, 현재 프레임에서 ROI 밖이면 OUT.
     """
 
-    def __init__(self, cooldown_frames: int = 20, recent_window_frames: int = 150, warning_threshold: int = 5, danger_threshold: int = 10):
+    def __init__(self, cooldown_frames: int = 20, recent_window_frames: int = 150):
         self.cooldown_frames = cooldown_frames
         self.recent_window_frames = recent_window_frames
-        self.warning_threshold = warning_threshold
-        self.danger_threshold = danger_threshold
         self.total_in = 0
         self.total_out = 0
         self.previous_inside = {}
@@ -95,13 +90,6 @@ class ROIFlowCounter:
         recent_in = sum(1 for e in self.recent_events if e["count_type"] == "IN")
         recent_out = sum(1 for e in self.recent_events if e["count_type"] == "OUT")
         recent_diff = recent_in - recent_out
-        abs_recent_diff = abs(recent_diff)
-        if abs_recent_diff >= self.danger_threshold:
-            flow_status = "DANGER"
-        elif abs_recent_diff >= self.warning_threshold:
-            flow_status = "WARNING"
-        else:
-            flow_status = "NORMAL"
         return {
             "total_in": self.total_in,
             "total_out": self.total_out,
@@ -110,7 +98,6 @@ class ROIFlowCounter:
             "recent_in": recent_in,
             "recent_out": recent_out,
             "flow_imbalance": recent_diff,
-            "flow_status": flow_status,
         }
 
 
@@ -170,7 +157,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def run_analyzer(args, frame_queue: queue.Queue = None):
+def run_analyzer(args, frame_callback=None, raw_queue=None):
     video_path = Path(args.video)
     if not video_path.exists():
         raise FileNotFoundError(f"Video not found: {video_path}")
@@ -193,23 +180,21 @@ def run_analyzer(args, frame_queue: queue.Queue = None):
 
     body_tracker = ByteTrackPersonTracker(body_model_path=args.body_model, conf=args.body_conf, imgsz=args.imgsz, device=resolved_device, tracker_config=tracker_config)
     head_detector = HeadDetector(head_model_path=args.head_model, conf=args.head_conf, imgsz=args.imgsz, device=resolved_device)
-    flow_counter = ROIFlowCounter(cooldown_frames=args.cross_cooldown, recent_window_frames=args.flow_recent_window, warning_threshold=args.flow_warning_threshold, danger_threshold=args.flow_danger_threshold)
-
-    backend_client = None
-    if args.send_backend:
-        backend_client = BackendClient(backend_url=args.backend_url, endpoint=args.backend_endpoint)
-        print(f"[INFO] Backend sending enabled: {backend_client.url}")
+    flow_counter = ROIFlowCounter(cooldown_frames=args.cross_cooldown, recent_window_frames=args.flow_recent_window)
 
     cap = cv2.VideoCapture(str(video_path))
     if not cap.isOpened():
         raise RuntimeError(f"Failed to open video: {video_path}")
 
+    # raw_queue 없으면 standalone 모드 → 자체 DBLogger 사용
+    standalone_db = None
+    if raw_queue is None:
+        from modules.db_logger import DBLogger as _DBLogger
+        standalone_db = _DBLogger(db_path=db_path, video_name=video_path.stem)
+
     frame_index = 0
     start_time = time.time()
     print(f"[INFO] Start analyzing: {video_path}")
-    print(f"[INFO] Database: {db_path}")
-
-    db_logger = DBLogger(db_path=db_path, video_name=video_path.stem)
 
     while True:
         ret, frame = cap.read()
@@ -225,12 +210,28 @@ def run_analyzer(args, frame_queue: queue.Queue = None):
         roi_person_count = max(len(roi_tracks), len(roi_heads))
         flow_summary = flow_counter.get_summary(current_roi_person_count=roi_person_count)
 
-        db_logger.insert(frame_index=frame_index, in_count=flow_summary["total_in"], out_count=flow_summary["total_out"], roi_person_count=roi_person_count)
+        if raw_queue is not None:
+            try:
+                raw_queue.put_nowait({
+                    "camera_id": args.camera_id,
+                    "frame_index": frame_index,
+                    "roi_person_count": roi_person_count,
+                    "in_count": flow_summary["total_in"],
+                    "out_count": flow_summary["total_out"],
+                    "flow_imbalance": flow_summary["flow_imbalance"],
+                })
+            except Exception:
+                pass
+        elif standalone_db is not None:
+            standalone_db.insert(
+                frame_index=frame_index,
+                in_count=flow_summary["total_in"],
+                out_count=flow_summary["total_out"],
+                roi_person_count=roi_person_count,
+                flow_imbalance=flow_summary["flow_imbalance"],
+            )
 
-        if backend_client is not None and frame_index % args.send_every_n_frames == 0:
-            backend_client.send_snapshot({"in_count": flow_summary["total_in"], "out_count": flow_summary["total_out"], "roi_person_count": roi_person_count})
-
-        need_draw = args.show or frame_queue is not None
+        need_draw = args.show or frame_callback is not None
         if need_draw:
             roi_manager.draw(frame)
             for person in roi_tracks:
@@ -239,16 +240,9 @@ def run_analyzer(args, frame_queue: queue.Queue = None):
                 x1, y1, x2, y2 = head.xyxy
                 cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 1)
 
-            if frame_queue is not None:
+            if frame_callback is not None:
                 _, jpg = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 75])
-                try:
-                    frame_queue.put_nowait(jpg.tobytes())
-                except queue.Full:
-                    try:
-                        frame_queue.get_nowait()
-                        frame_queue.put_nowait(jpg.tobytes())
-                    except Exception:
-                        pass
+                frame_callback(jpg.tobytes())
 
             if args.show:
                 cv2.imshow("CCTV Crowd Analyzer", frame)
@@ -260,9 +254,10 @@ def run_analyzer(args, frame_queue: queue.Queue = None):
         if args.max_frames > 0 and frame_index >= args.max_frames:
             break
         if frame_index % 30 == 0:
-            print(f"[INFO] frame={frame_index}, roi_persons={roi_person_count}, in={flow_summary['total_in']}, out={flow_summary['total_out']}, flow={flow_summary['flow_status']}")
+            print(f"[INFO] frame={frame_index}, persons={roi_person_count}, in={flow_summary['total_in']}, out={flow_summary['total_out']}, imbalance={flow_summary['flow_imbalance']}")
 
-    db_logger.close()
+    if standalone_db is not None:
+        standalone_db.close()
     cap.release()
     if args.show:
         cv2.destroyAllWindows()

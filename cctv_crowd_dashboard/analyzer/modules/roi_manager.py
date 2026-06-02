@@ -15,6 +15,7 @@ class ROIConfig:
     camera_id: str
     roi_name: str
     points: List[Point]
+    area_m2: float = 0.0
 
 
 class ROIManager:
@@ -56,9 +57,14 @@ class ROIManager:
             camera_id=data.get("camera_id", "cam_001"),
             roi_name=data.get("roi_name", "default_roi"),
             points=points,
+            area_m2=float(data.get("area_m2", 0.0)),
         )
 
         return cls(config)
+
+    @property
+    def area_m2(self) -> float:
+        return self.config.area_m2
 
     @property
     def is_full_frame(self) -> bool:
