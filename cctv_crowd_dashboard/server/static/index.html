@@ -11,16 +11,43 @@
 
     h1 { font-size: 1.4rem; font-weight: 600; color: #94a3b8; margin-bottom: 24px; letter-spacing: 0.05em; }
 
-    .cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 24px; }
+    .layout { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+
+    .video-panel {
+      background: #1e2130;
+      border-radius: 12px;
+      border: 1px solid #2d3148;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+    .video-panel .panel-title {
+      font-size: 0.75rem; color: #64748b; text-transform: uppercase;
+      letter-spacing: 0.08em; padding: 12px 16px; border-bottom: 1px solid #2d3148;
+    }
+    .video-panel img {
+      width: 100%;
+      display: block;
+      background: #0f1117;
+      min-height: 240px;
+    }
+    .video-panel .no-feed {
+      display: flex; align-items: center; justify-content: center;
+      min-height: 240px; color: #334155; font-size: 0.85rem;
+    }
+
+    .dashboard { display: flex; flex-direction: column; gap: 16px; }
+
+    .cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
 
     .card {
       background: #1e2130;
       border-radius: 12px;
-      padding: 24px;
+      padding: 20px;
       border: 1px solid #2d3148;
     }
-    .card .label { font-size: 0.75rem; color: #64748b; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 8px; }
-    .card .value { font-size: 2.5rem; font-weight: 700; color: #f1f5f9; }
+    .card .label { font-size: 0.7rem; color: #64748b; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 6px; }
+    .card .value { font-size: 2rem; font-weight: 700; color: #f1f5f9; }
 
     .status-bar {
       display: flex;
@@ -28,11 +55,10 @@
       gap: 12px;
       background: #1e2130;
       border-radius: 12px;
-      padding: 16px 24px;
-      margin-bottom: 24px;
+      padding: 14px 20px;
       border: 1px solid #2d3148;
     }
-    .status-dot { width: 12px; height: 12px; border-radius: 50%; }
+    .status-dot { width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0; }
     .status-label { font-size: 0.8rem; color: #64748b; text-transform: uppercase; letter-spacing: 0.08em; }
     .status-value { font-size: 1rem; font-weight: 600; margin-left: 4px; }
 
@@ -46,14 +72,20 @@
     .chart-box {
       background: #1e2130;
       border-radius: 12px;
-      padding: 24px;
+      padding: 20px;
       border: 1px solid #2d3148;
+      flex: 1;
     }
-    .chart-box h2 { font-size: 0.8rem; color: #64748b; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 16px; }
+    .chart-box h2 { font-size: 0.75rem; color: #64748b; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 14px; }
 
     .conn-status { position: fixed; top: 16px; right: 24px; font-size: 0.75rem; color: #64748b; }
     .conn-status.connected { color: #22c55e; }
     .conn-status.disconnected { color: #ef4444; }
+
+    @media (max-width: 900px) {
+      .layout { grid-template-columns: 1fr; }
+      .cards { grid-template-columns: repeat(3, 1fr); }
+    }
   </style>
 </head>
 <body>
@@ -61,30 +93,41 @@
 
   <h1>CCTV 군중 모니터링</h1>
 
-  <div class="status-bar status-NORMAL" id="status-bar">
-    <div class="status-dot"></div>
-    <span class="status-label">FLOW</span>
-    <span class="status-value" id="flow-status">NORMAL</span>
-  </div>
+  <div class="layout">
+    <div class="video-panel">
+      <div class="panel-title">라이브 영상</div>
+      <img id="video-feed" src="/video_feed" alt="video feed"
+           onerror="this.style.display='none'; document.getElementById('no-feed').style.display='flex';" />
+      <div class="no-feed" id="no-feed" style="display:none;">분석기 대기 중...</div>
+    </div>
 
-  <div class="cards">
-    <div class="card">
-      <div class="label">현재 인원</div>
-      <div class="value" id="val-persons">—</div>
-    </div>
-    <div class="card">
-      <div class="label">총 입장 (IN)</div>
-      <div class="value" id="val-in">—</div>
-    </div>
-    <div class="card">
-      <div class="label">총 퇴장 (OUT)</div>
-      <div class="value" id="val-out">—</div>
-    </div>
-  </div>
+    <div class="dashboard">
+      <div class="status-bar status-NORMAL" id="status-bar">
+        <div class="status-dot"></div>
+        <span class="status-label">FLOW</span>
+        <span class="status-value" id="flow-status">NORMAL</span>
+      </div>
 
-  <div class="chart-box">
-    <h2>ROI 인원 수 추이</h2>
-    <canvas id="chart" height="100"></canvas>
+      <div class="cards">
+        <div class="card">
+          <div class="label">현재 인원</div>
+          <div class="value" id="val-persons">—</div>
+        </div>
+        <div class="card">
+          <div class="label">총 입장</div>
+          <div class="value" id="val-in">—</div>
+        </div>
+        <div class="card">
+          <div class="label">총 퇴장</div>
+          <div class="value" id="val-out">—</div>
+        </div>
+      </div>
+
+      <div class="chart-box">
+        <h2>ROI 인원 수 추이</h2>
+        <canvas id="chart"></canvas>
+      </div>
+    </div>
   </div>
 
   <script>
@@ -140,15 +183,12 @@
     function updateUI(rows) {
       if (!rows.length) return;
       const latest = rows[rows.length - 1];
-
       document.getElementById('val-persons').textContent = latest.roi_person_count;
       document.getElementById('val-in').textContent = latest.in_count;
       document.getElementById('val-out').textContent = latest.out_count;
-
       const status = deriveFlowStatus(rows);
       document.getElementById('flow-status').textContent = status;
-      const bar = document.getElementById('status-bar');
-      bar.className = `status-bar status-${status}`;
+      document.getElementById('status-bar').className = `status-bar status-${status}`;
     }
 
     function appendRows(rows) {

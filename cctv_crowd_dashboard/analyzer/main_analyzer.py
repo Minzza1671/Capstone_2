@@ -1,4 +1,5 @@
 import argparse
+import queue
 import time
 from collections import deque
 from pathlib import Path
@@ -141,14 +142,14 @@ def run_interactive_roi_setup_if_needed(args, video_path: Path, roi_path: Path):
     run_roi_editor_on_frame(frame=first_frame, video_path=video_path, output_path=roi_path, camera_id=args.camera_id, roi_name=f"{video_path.stem}_roi", max_display_width=args.max_display_width)
 
 
-def main():
+def build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser()
     parser.add_argument("--head-model", default=str(PROJECT_ROOT / "models" / "ccrv_head_v5.pt"))
     parser.add_argument("--body-model", default=str(PROJECT_ROOT / "models" / "body_wider_labeling.pt"))
     parser.add_argument("--video", default=str(PROJECT_ROOT / "data" / "test.mp4"))
     parser.add_argument("--camera-id", default="cam_001")
     parser.add_argument("--max-display-width", type=int, default=1280)
-    parser.add_argument("--skip-interactive-setup", action="store_true", help="Reuse saved ROI config without opening setup window.")
+    parser.add_argument("--skip-interactive-setup", action="store_true")
     parser.add_argument("--roi", default=None)
     parser.add_argument("--db", default=None)
     parser.add_argument("--head-conf", type=float, default=0.20)
@@ -156,7 +157,7 @@ def main():
     parser.add_argument("--imgsz", type=int, default=960)
     parser.add_argument("--max-frames", type=int, default=0)
     parser.add_argument("--no-show", dest="show", action="store_false", default=True)
-    parser.add_argument("--device", default="auto", help="auto, 0 for GPU, cpu for CPU.")
+    parser.add_argument("--device", default="auto")
     parser.add_argument("--tracker-config", default=None)
     parser.add_argument("--flow-recent-window", type=int, default=150)
     parser.add_argument("--flow-warning-threshold", type=int, default=5)
@@ -166,8 +167,10 @@ def main():
     parser.add_argument("--backend-url", default="http://127.0.0.1:8000")
     parser.add_argument("--backend-endpoint", default="/api/analysis/snapshot")
     parser.add_argument("--send-every-n-frames", type=int, default=10)
-    args = parser.parse_args()
+    return parser
 
+
+def run_analyzer(args, frame_queue: queue.Queue = None):
     video_path = Path(args.video)
     if not video_path.exists():
         raise FileNotFoundError(f"Video not found: {video_path}")
@@ -187,8 +190,6 @@ def main():
     print(f"[INFO] ROI config: {roi_path}")
     print(f"[INFO] ROI: {roi_manager.to_dict()}")
     print("[INFO] Loading models...")
-    print("[INFO] Body tracking: ByteTrack")
-    print("[INFO] Flow counting: ROI boundary crossing")
 
     body_tracker = ByteTrackPersonTracker(body_model_path=args.body_model, conf=args.body_conf, imgsz=args.imgsz, device=resolved_device, tracker_config=tracker_config)
     head_detector = HeadDetector(head_model_path=args.head_model, conf=args.head_conf, imgsz=args.imgsz, device=resolved_device)
@@ -205,8 +206,7 @@ def main():
 
     frame_index = 0
     start_time = time.time()
-    print("[INFO] Start analyzing video with ByteTrack + ROI boundary flow...")
-    print(f"[INFO] Video: {video_path}")
+    print(f"[INFO] Start analyzing: {video_path}")
     print(f"[INFO] Database: {db_path}")
 
     db_logger = DBLogger(db_path=db_path, video_name=video_path.stem)
@@ -226,36 +226,53 @@ def main():
         flow_summary = flow_counter.get_summary(current_roi_person_count=roi_person_count)
 
         db_logger.insert(frame_index=frame_index, in_count=flow_summary["total_in"], out_count=flow_summary["total_out"], roi_person_count=roi_person_count)
-        minimal_payload = {"in_count": flow_summary["total_in"], "out_count": flow_summary["total_out"], "roi_person_count": roi_person_count}
-        if backend_client is not None and frame_index % args.send_every_n_frames == 0:
-            backend_client.send_snapshot(minimal_payload)
 
-        if args.show:
+        if backend_client is not None and frame_index % args.send_every_n_frames == 0:
+            backend_client.send_snapshot({"in_count": flow_summary["total_in"], "out_count": flow_summary["total_out"], "roi_person_count": roi_person_count})
+
+        need_draw = args.show or frame_queue is not None
+        if need_draw:
             roi_manager.draw(frame)
             for person in roi_tracks:
                 draw_track(frame, person, color=(255, 0, 0))
             for head in roi_heads:
                 x1, y1, x2, y2 = head.xyxy
                 cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 1)
-            cv2.imshow("CCTV Crowd Analyzer - ByteTrack ROI Flow", frame)
-            cv2.waitKey(1)
-            if cv2.getWindowProperty("CCTV Crowd Analyzer - ByteTrack ROI Flow", cv2.WND_PROP_VISIBLE) < 1:
-                print("[INFO] Window closed by user.")
-                break
+
+            if frame_queue is not None:
+                _, jpg = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 75])
+                try:
+                    frame_queue.put_nowait(jpg.tobytes())
+                except queue.Full:
+                    try:
+                        frame_queue.get_nowait()
+                        frame_queue.put_nowait(jpg.tobytes())
+                    except Exception:
+                        pass
+
+            if args.show:
+                cv2.imshow("CCTV Crowd Analyzer", frame)
+                cv2.waitKey(1)
+                if cv2.getWindowProperty("CCTV Crowd Analyzer", cv2.WND_PROP_VISIBLE) < 1:
+                    print("[INFO] Window closed by user.")
+                    break
+
         if args.max_frames > 0 and frame_index >= args.max_frames:
             break
         if frame_index % 30 == 0:
-            print(f"[INFO] frame={frame_index}, roi_persons={roi_person_count}, tracks={len(roi_tracks)}, heads={len(roi_heads)}, in={flow_summary['total_in']}, out={flow_summary['total_out']}, diff={flow_summary['net_flow']}, recent_diff={flow_summary['flow_imbalance']}, flow={flow_summary['flow_status']}")
+            print(f"[INFO] frame={frame_index}, roi_persons={roi_person_count}, in={flow_summary['total_in']}, out={flow_summary['total_out']}, flow={flow_summary['flow_status']}")
 
     db_logger.close()
     cap.release()
     if args.show:
         cv2.destroyAllWindows()
     elapsed = time.time() - start_time
-    print("[DONE] Analysis finished.")
-    print(f"[DONE] Frames processed: {frame_index}")
-    print(f"[DONE] Elapsed: {elapsed:.2f}s")
-    print(f"[DONE] Database: {db_path}")
+    print(f"[DONE] Frames={frame_index}, elapsed={elapsed:.2f}s, db={db_path}")
+
+
+def main():
+    args = build_arg_parser().parse_args()
+    run_analyzer(args)
 
 
 if __name__ == "__main__":

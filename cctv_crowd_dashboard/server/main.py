@@ -1,16 +1,50 @@
 import asyncio
 import json
+import queue
 import sqlite3
+import sys
+import threading
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
 DB_PATH = Path(__file__).resolve().parents[1] / "analyzer" / "outputs" / "analysis.db"
 STATIC_DIR = Path(__file__).parent / "static"
+ANALYZER_DIR = Path(__file__).resolve().parents[1] / "analyzer"
 
-app = FastAPI()
+frame_queue: queue.Queue = queue.Queue(maxsize=2)
+
+
+def _start_analyzer():
+    sys.path.insert(0, str(ANALYZER_DIR))
+    try:
+        from main_analyzer import build_arg_parser, run_analyzer
+    except ImportError as e:
+        print(f"[SERVER] Analyzer import failed: {e}")
+        return
+
+    parser = build_arg_parser()
+    args = parser.parse_args([])
+    args.show = False
+    args.skip_interactive_setup = True
+
+    try:
+        run_analyzer(args, frame_queue=frame_queue)
+    except Exception as e:
+        print(f"[SERVER] Analyzer error: {e}")
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    t = threading.Thread(target=_start_analyzer, daemon=True)
+    t.start()
+    yield
+
+
+app = FastAPI(lifespan=lifespan)
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 
@@ -50,12 +84,24 @@ async def history(limit: int = 300, video_name: str = ""):
     return list(reversed(rows))
 
 
+@app.get("/video_feed")
+async def video_feed():
+    async def generate():
+        while True:
+            if not frame_queue.empty():
+                jpg = frame_queue.get_nowait()
+                yield b"--frame\r\nContent-Type: image/jpeg\r\n\r\n" + jpg + b"\r\n"
+            else:
+                await asyncio.sleep(0.033)
+
+    return StreamingResponse(generate(), media_type="multipart/x-mixed-replace; boundary=frame")
+
+
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
     last_id = 0
 
-    # 초기 데이터 전송
     rows = query_db("SELECT * FROM crowd_log ORDER BY id DESC LIMIT 300")
     rows = list(reversed(rows))
     if rows:
