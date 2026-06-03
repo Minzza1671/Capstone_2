@@ -5,7 +5,7 @@ from pathlib import Path
 
 import cv2
 
-from modules.bytetrack_tracker import ByteTrackPersonTracker, HeadDetector
+from modules.bytetrack_tracker import ByteTrackPersonTracker
 from modules.roi_manager import ROIManager
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -45,7 +45,6 @@ class ROIFlowCounter:
         self.recent_events = deque()
 
     def update(self, tracked_persons, roi_manager: ROIManager, frame_index: int):
-        events = []
         for person in tracked_persons:
             track_id = person.track_id
             curr_inside = roi_manager.contains_point(person.point)
@@ -60,22 +59,19 @@ class ROIFlowCounter:
             if frame_index - last_frame < self.cooldown_frames:
                 continue
             if not prev_inside and curr_inside:
-                count_type = "IN"
                 self.total_in += 1
+                count_type = "IN"
             elif prev_inside and not curr_inside:
-                count_type = "OUT"
                 self.total_out += 1
+                count_type = "OUT"
             else:
                 continue
             self.last_cross_frame[track_id] = frame_index
-            event = {"frame_index": frame_index, "track_id": track_id, "count_type": count_type}
-            events.append(event)
-            self.recent_events.append(event)
+            self.recent_events.append({"frame_index": frame_index, "track_id": track_id, "count_type": count_type})
         while self.recent_events and frame_index - self.recent_events[0]["frame_index"] > self.recent_window_frames:
             self.recent_events.popleft()
-        return events
 
-    def get_summary(self, current_roi_person_count: int):
+    def get_summary(self):
         recent_in = sum(1 for e in self.recent_events if e["count_type"] == "IN")
         recent_out = sum(1 for e in self.recent_events if e["count_type"] == "OUT")
         return {
@@ -88,13 +84,10 @@ class ROIFlowCounter:
 def build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser()
     parser.add_argument("--head-model", default=str(PROJECT_ROOT / "models" / "ccrv_head_v5.pt"))
-    parser.add_argument("--body-model", default=str(PROJECT_ROOT / "models" / "body_wider_labeling.pt"))
     parser.add_argument("--video", default=str(PROJECT_ROOT / "data" / "test.mp4"))
     parser.add_argument("--camera-id", default="cam_001")
-    parser.add_argument("--max-display-width", type=int, default=1280)
     parser.add_argument("--roi", default=None)
     parser.add_argument("--head-conf", type=float, default=0.20)
-    parser.add_argument("--body-conf", type=float, default=0.25)
     parser.add_argument("--imgsz", type=int, default=960)
     parser.add_argument("--max-frames", type=int, default=0)
     parser.add_argument("--no-show", dest="show", action="store_false", default=True)
@@ -114,7 +107,7 @@ def run_analyzer(args, frame_callback=None, raw_queue=None):
     if not roi_path.exists():
         raise FileNotFoundError(
             f"ROI config not found: {roi_path}\n"
-            "Run 'python setup_roi.py' first to configure the ROI."
+            "Run 'python setup_roi.py' first."
         )
 
     tracker_config = args.tracker_config if args.tracker_config else default_tracker_config_path()
@@ -126,13 +119,12 @@ def run_analyzer(args, frame_callback=None, raw_queue=None):
     roi_manager = ROIManager.from_json(str(roi_path))
     print(f"[INFO] ROI      : {roi_path}")
 
-    body_tracker = ByteTrackPersonTracker(
-        body_model_path=args.body_model, conf=args.body_conf,
-        imgsz=args.imgsz, device=resolved_device, tracker_config=tracker_config,
-    )
-    head_detector = HeadDetector(
-        head_model_path=args.head_model, conf=args.head_conf,
-        imgsz=args.imgsz, device=resolved_device,
+    tracker = ByteTrackPersonTracker(
+        model_path=args.head_model,
+        conf=args.head_conf,
+        imgsz=args.imgsz,
+        device=resolved_device,
+        tracker_config=tracker_config,
     )
     flow_counter = ROIFlowCounter(
         cooldown_frames=args.cross_cooldown,
@@ -153,14 +145,12 @@ def run_analyzer(args, frame_callback=None, raw_queue=None):
             break
         frame_index += 1
 
-        all_tracks = body_tracker.update(frame)
-        all_heads = head_detector.detect(frame)
+        all_tracks = tracker.update(frame)
         roi_tracks = [p for p in all_tracks if roi_manager.contains_point(p.point)]
-        roi_heads = roi_manager.filter_detections(all_heads, point_attr="center")
 
         flow_counter.update(tracked_persons=all_tracks, roi_manager=roi_manager, frame_index=frame_index)
-        roi_person_count = max(len(roi_tracks), len(roi_heads))
-        flow_summary = flow_counter.get_summary(current_roi_person_count=roi_person_count)
+        flow_summary = flow_counter.get_summary()
+        roi_person_count = len(roi_tracks)
 
         if raw_queue is not None:
             try:
@@ -180,10 +170,20 @@ def run_analyzer(args, frame_callback=None, raw_queue=None):
             roi_manager.draw(frame)
             for person in roi_tracks:
                 x1, y1, x2, y2 = person.bbox
-                cv2.rectangle(frame, (x1, y1), (x2, y2), (255, 0, 0), 1)
-            for head in roi_heads:
-                x1, y1, x2, y2 = head.xyxy
                 cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 1)
+                cv2.putText(frame, str(person.track_id), (x1, y1 - 4),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.45, (0, 255, 0), 1)
+
+            if args.show:
+                lines = [
+                    f"frame : {frame_index}",
+                    f"heads : {roi_person_count}",
+                    f"IN/OUT: {flow_summary['total_in']} / {flow_summary['total_out']}",
+                    f"imbal : {flow_summary['flow_imbalance']}",
+                ]
+                for i, text in enumerate(lines):
+                    cv2.putText(frame, text, (10, 28 + i * 28),
+                                cv2.FONT_HERSHEY_SIMPLEX, 0.75, (0, 220, 255), 2)
 
             if frame_callback is not None:
                 _, jpg = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 75])
@@ -202,7 +202,7 @@ def run_analyzer(args, frame_callback=None, raw_queue=None):
         if frame_index % 30 == 0:
             print(
                 f"[INFO] frame={frame_index}"
-                f"  persons={roi_person_count}"
+                f"  heads={roi_person_count}"
                 f"  in={flow_summary['total_in']}"
                 f"  out={flow_summary['total_out']}"
                 f"  imbalance={flow_summary['flow_imbalance']}"
