@@ -79,16 +79,6 @@ class ROIManager:
 
         return result >= 0
 
-    def filter_detections(self, detections, point_attr: str):
-        filtered = []
-
-        for det in detections:
-            point = getattr(det, point_attr)
-            if self.contains_point(point):
-                filtered.append(det)
-
-        return filtered
-
     def draw(self, frame):
         if self.is_full_frame:
             return frame

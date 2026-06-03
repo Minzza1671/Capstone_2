@@ -46,6 +46,12 @@
     .status-label { font-size: 0.8rem; color: #64748b; text-transform: uppercase; letter-spacing: 0.08em; }
     .status-value { font-size: 1rem; font-weight: 600; margin-left: 4px; }
     .status-score { font-size: 0.8rem; color: #64748b; margin-left: auto; }
+    .status-override {
+      font-size: 0.7rem; font-weight: 600; color: #fca5a5;
+      background: #7f1d1d44; border: 1px solid #ef444466;
+      padding: 3px 8px; border-radius: 6px; margin-left: 12px; display: none;
+    }
+    .status-override.active { display: inline-block; }
 
     .status-NORMAL   .status-dot { background: #22c55e; box-shadow: 0 0 8px #22c55e88; }
     .status-NORMAL   .status-value { color: #22c55e; }
@@ -92,6 +98,7 @@
         <div class="status-dot"></div>
         <span class="status-label">위험도</span>
         <span class="status-value" id="risk-level">NORMAL</span>
+        <span class="status-override" id="risk-override"></span>
         <span class="status-score" id="risk-score">score: —</span>
       </div>
 
@@ -105,12 +112,12 @@
           <div class="value small" id="val-density">—</div>
         </div>
         <div class="card">
-          <div class="label">총 입장</div>
-          <div class="value" id="val-in">—</div>
+          <div class="label">흐름 강도</div>
+          <div class="value" id="val-flow">—</div>
         </div>
         <div class="card">
-          <div class="label">총 퇴장</div>
-          <div class="value" id="val-out">—</div>
+          <div class="label">위험 점수</div>
+          <div class="value small" id="val-riskscore">—</div>
         </div>
       </div>
 
@@ -157,19 +164,33 @@
       const latest = rows[rows.length - 1];
 
       document.getElementById('val-persons').textContent = latest.roi_person_count ?? '—';
-      document.getElementById('val-in').textContent = latest.in_count ?? '—';
-      document.getElementById('val-out').textContent = latest.out_count ?? '—';
 
       const density = latest.density_per_m2;
       document.getElementById('val-density').textContent =
         (density && density > 0) ? density.toFixed(2) : '—';
 
-      const level = latest.risk_level || 'NORMAL';
+      document.getElementById('val-flow').textContent = latest.flow_imbalance ?? '—';
+
       const score = latest.risk_score;
+      document.getElementById('val-riskscore').textContent =
+        score != null ? score.toFixed(3) : '—';
+
+      const level = latest.risk_level || 'NORMAL';
       document.getElementById('risk-level').textContent = level;
       document.getElementById('risk-score').textContent =
         score != null ? `score: ${score.toFixed(2)}` : 'score: —';
       document.getElementById('status-bar').className = `status-bar status-${level}`;
+
+      // 밀도 override 표시: density 룰 등급이 가중합 등급보다 높아 강제될 때
+      const LEVELS = ['NORMAL', 'CAUTION', 'WARNING', 'DANGER', 'CRITICAL'];
+      const overrideEl = document.getElementById('risk-override');
+      const sLv = latest.score_level, dLv = latest.density_level;
+      if (sLv && dLv && LEVELS.indexOf(dLv) > LEVELS.indexOf(sLv)) {
+        overrideEl.textContent = `⚠ 밀도 강제 (가중 ${sLv})`;
+        overrideEl.classList.add('active');
+      } else {
+        overrideEl.classList.remove('active');
+      }
     }
 
     function appendRows(rows) {
