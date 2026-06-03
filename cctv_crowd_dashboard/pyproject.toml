@@ -1,0 +1,17 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "cctv-crowd-dashboard"
+version = "0.1.0"
+description = "CCTV 실시간 군중 밀집 감지 대시보드 (P2PNet + Optical Flow)"
+requires-python = ">=3.10"
+# 의존성(torch, opencv, fastapi 등)은 기존 환경에 이미 설치돼 있어
+# 여기서 핀하지 않는다. 새 환경 구성 시 별도 requirements로 관리.
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["analyzer*", "server*"]
+# p2pnet/ 은 벤더된 third-party 코드라 패키지에 포함하지 않고,
+# 런타임에 p2pnet_counter.py 가 sys.path 로 주입한다.

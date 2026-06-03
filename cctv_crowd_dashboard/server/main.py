@@ -2,21 +2,16 @@ import asyncio
 import json
 import queue
 import sqlite3
-import sys
 import threading
 from contextlib import asynccontextmanager
 from pathlib import Path
-
-# analyzer/ 폴더를 sys.path에 추가해야 analyzer.py import 가능
-ANALYZER_DIR = Path(__file__).resolve().parents[1] / "analyzer"
-sys.path.insert(0, str(ANALYZER_DIR))
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse, Response
 from fastapi.staticfiles import StaticFiles
 
-from services.db_logger import DBLogger
-from services.risk_engine import RiskEngine
+from server.services.db_logger import DBLogger
+from server.services.risk_engine import RiskEngine
 
 DB_PATH = Path(__file__).resolve().parents[1] / "analyzer" / "outputs" / "analysis.db"
 STATIC_DIR = Path(__file__).parent / "static"
@@ -32,7 +27,7 @@ def _set_frame(jpg: bytes):
 
 def _start_analyzer(args):
     try:
-        from analyzer import run_analyzer
+        from analyzer.analyzer import run_analyzer
     except ImportError as e:
         print(f"[SERVER] Analyzer import failed: {e}")
         return
@@ -44,7 +39,7 @@ def _start_analyzer(args):
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    from analyzer import build_arg_parser, default_roi_path
+    from analyzer.analyzer import build_arg_parser, default_roi_path
 
     args = build_arg_parser().parse_args([])
     args.show = False

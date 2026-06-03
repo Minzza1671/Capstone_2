@@ -5,9 +5,9 @@ from pathlib import Path
 import cv2
 import numpy as np
 
-from modules.p2pnet_counter import P2PNetCounter
-from modules.optical_flow import FarnebackFlowAnalyzer
-from modules.roi_manager import ROIManager
+from analyzer.modules.p2pnet_counter import P2PNetCounter
+from analyzer.modules.optical_flow import FarnebackFlowAnalyzer
+from analyzer.modules.roi_manager import ROIManager
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 

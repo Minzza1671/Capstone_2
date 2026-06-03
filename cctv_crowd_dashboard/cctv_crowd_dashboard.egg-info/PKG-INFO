@@ -1,0 +1,5 @@
+Metadata-Version: 2.4
+Name: cctv-crowd-dashboard
+Version: 0.1.0
+Summary: CCTV 실시간 군중 밀집 감지 대시보드 (P2PNet + Optical Flow)
+Requires-Python: >=3.10
