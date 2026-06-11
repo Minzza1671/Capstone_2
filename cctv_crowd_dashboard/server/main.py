@@ -1,151 +1,164 @@
+"""
+FastAPI 서버 — 분석 파이프라인을 실시간 대시보드/스트림에 연결.
+
+  분석기(별도 스레드) ─ iter_points ─► (visual frame, result)
+      ├─ MJPEG  /stream   : draw_visual 영상 (수치 없음, CCTV 뷰)
+      ├─ WS     /ws       : result 수치 push (대시보드)
+      └─ DB     risk_log  : 비동기 이력 기록
+
+실행:  python -m server.main      (기본 test.mp4 + test_roi.json)
+"""
+
 import asyncio
 import json
 import queue
-import sqlite3
 import threading
-from contextlib import asynccontextmanager
+import time
 from pathlib import Path
 
+import cv2
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
-from fastapi.responses import HTMLResponse, Response
+from fastapi.responses import HTMLResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
+from analyzer.analyzer import build_arg_parser, default_roi_path, iter_points
 from server.services.db_logger import DBLogger
-from server.services.risk_engine import RiskEngine
 
-DB_PATH = Path(__file__).resolve().parents[1] / "analyzer" / "outputs" / "analysis.db"
+ROOT = Path(__file__).resolve().parents[1]
 STATIC_DIR = Path(__file__).parent / "static"
+DB_PATH = ROOT / "analyzer" / "outputs" / "risk.db"
 
-latest_frame: bytes = None
-raw_queue: queue.Queue = queue.Queue(maxsize=500)
-
-
-def _set_frame(jpg: bytes):
-    global latest_frame
-    latest_frame = jpg
-
-
-def _start_analyzer(args):
-    try:
-        from analyzer.analyzer import run_analyzer
-    except ImportError as e:
-        print(f"[SERVER] Analyzer import failed: {e}")
-        return
-    try:
-        run_analyzer(args, frame_callback=_set_frame, raw_queue=raw_queue)
-    except Exception as e:
-        print(f"[SERVER] Analyzer error: {e}")
+# 공유 상태 (분석 스레드 → 서버)
+_latest_jpeg: bytes | None = None
+_result_q: "queue.Queue[dict]" = queue.Queue(maxsize=1000)
+_latest_result: dict = {}
+_clients: set[WebSocket] = set()
+_stop = threading.Event()
 
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    from analyzer.analyzer import build_arg_parser, default_roi_path
+def _analyzer_loop(args, camera_id: str):
+    """분석기를 반복 실행(영상 끝나면 재시작 — 데모 연속 재생)."""
+    global _latest_jpeg
+    while not _stop.is_set():
+        try:
+            for _idx, frame, result in iter_points(args):
+                if _stop.is_set():
+                    return
+                ok, buf = cv2.imencode(".jpg", frame,
+                                       [cv2.IMWRITE_JPEG_QUALITY, 80])
+                if ok:
+                    _latest_jpeg = buf.tobytes()
+                result["camera_id"] = camera_id
+                try:
+                    _result_q.put_nowait(result)
+                except queue.Full:
+                    pass
+        except Exception as e:
+            print(f"[SERVER] analyzer error: {e}")
+            time.sleep(1.0)
 
+
+async def _drain_results(app: FastAPI):
+    """큐 소비 → DB 기록 + WebSocket 브로드캐스트."""
+    global _latest_result
+    db: DBLogger = app.state.db
+    loop = asyncio.get_running_loop()
+    while True:
+        try:
+            result = await loop.run_in_executor(None, _result_q.get, True, 1.0)
+        except queue.Empty:
+            continue
+        db.insert(result, camera_id=result.get("camera_id", "cam_001"))
+        payload = {**result, "ts": time.time()}
+        _latest_result = payload
+        dead = []
+        for ws in list(_clients):
+            try:
+                await ws.send_text(json.dumps(payload))
+            except Exception:
+                dead.append(ws)
+        for ws in dead:
+            _clients.discard(ws)
+
+
+def _make_app() -> FastAPI:
     args = build_arg_parser().parse_args([])
     args.show = False
+    roi_path = Path(args.roi) if args.roi else default_roi_path(Path(args.video))
+    video_name = Path(args.video).stem
 
-    video_path = Path(args.video)
-    roi_path = Path(args.roi) if args.roi else default_roi_path(video_path)
+    app = FastAPI(title="Crowd Risk Dashboard")
+    if STATIC_DIR.exists():
+        app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
-    if not roi_path.exists():
-        print(f"[SERVER] ROI not found: {roi_path}")
-        print("[SERVER] Run 'python setup_roi.py' first, then restart the server.")
-        yield
-        return
+    @app.on_event("startup")
+    async def _startup():
+        if not roi_path.exists():
+            print(f"[SERVER] ROI not found: {roi_path} — setup_roi 먼저 실행.")
+        app.state.db = DBLogger(DB_PATH, video_name=video_name)
+        _stop.clear()
+        app.state.thread = threading.Thread(
+            target=_analyzer_loop, args=(args, args.camera_id), daemon=True)
+        app.state.thread.start()
+        app.state.drain = asyncio.create_task(_drain_results(app))
+        print(f"[SERVER] up. video={video_name} roi={roi_path.name}")
 
-    area_m2 = float(json.loads(roi_path.read_text(encoding="utf-8")).get("area_m2", 0.0))
-    app.state.risk_engine = RiskEngine(area_m2=area_m2)
-    app.state.db_logger = DBLogger(db_path=DB_PATH, video_name="live")
+    @app.on_event("shutdown")
+    async def _shutdown():
+        _stop.set()
+        app.state.drain.cancel()
+        app.state.db.close()
 
-    threading.Thread(target=_start_analyzer, args=(args,), daemon=True).start()
-    asyncio.create_task(_process_raw_queue(app))
-    yield
-    app.state.db_logger.close()
+    @app.get("/", response_class=HTMLResponse)
+    async def index():
+        f = STATIC_DIR / "index.html"
+        if f.exists():
+            return f.read_text(encoding="utf-8")
+        return "<h1>Crowd Risk</h1><p>dashboard: static/index.html 없음 (Phase 5)</p>"
 
+    @app.get("/stream")
+    async def stream():
+        async def gen():
+            boundary = b"--frame\r\nContent-Type: image/jpeg\r\n\r\n"
+            while True:
+                if _latest_jpeg is not None:
+                    yield boundary + _latest_jpeg + b"\r\n"
+                await asyncio.sleep(0.04)  # ~25fps 상한
+        return StreamingResponse(
+            gen(), media_type="multipart/x-mixed-replace; boundary=frame")
 
-async def _process_raw_queue(app: FastAPI):
-    while True:
-        if not raw_queue.empty():
-            snap = raw_queue.get_nowait()
-            result = app.state.risk_engine.compute(snap)
-            app.state.db_logger.insert(
-                camera_id=result.get("camera_id", "cam_001"),
-                frame_index=result["frame_index"],
-                in_count=result["in_count"],
-                out_count=result["out_count"],
-                roi_person_count=result["roi_person_count"],
-                flow_imbalance=result["flow_imbalance"],
-                density_per_m2=result["density_per_m2"],
-                risk_score=result["risk_score"],
-                risk_level=result["risk_level"],
-            )
-        else:
-            await asyncio.sleep(0.033)
+    @app.get("/api/history")
+    async def history(limit: int = 300):
+        return app.state.db.recent(limit=limit)
 
+    @app.get("/api/latest")
+    async def latest():
+        return _latest_result
 
-app = FastAPI(lifespan=lifespan)
-app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+    @app.websocket("/ws")
+    async def ws_endpoint(ws: WebSocket):
+        await ws.accept()
+        _clients.add(ws)
+        if _latest_result:
+            await ws.send_text(json.dumps(_latest_result))
+        try:
+            while True:
+                await ws.receive_text()  # 클라 ping 대기(연결 유지)
+        except WebSocketDisconnect:
+            pass
+        finally:
+            _clients.discard(ws)
 
-
-def query_db(sql: str, params: tuple = ()):
-    if not DB_PATH.exists():
-        return []
-    conn = sqlite3.connect(str(DB_PATH))
-    conn.row_factory = sqlite3.Row
-    rows = conn.execute(sql, params).fetchall()
-    conn.close()
-    return [dict(r) for r in rows]
-
-
-@app.get("/")
-async def index():
-    return HTMLResponse((STATIC_DIR / "index.html").read_text(encoding="utf-8"))
-
-
-@app.get("/api/videos")
-async def videos():
-    rows = query_db("SELECT DISTINCT video_name FROM crowd_log ORDER BY video_name")
-    return [r["video_name"] for r in rows]
-
-
-@app.get("/api/history")
-async def history(limit: int = 300, video_name: str = ""):
-    if video_name:
-        rows = query_db(
-            "SELECT * FROM crowd_log WHERE video_name=? ORDER BY id DESC LIMIT ?",
-            (video_name, limit),
-        )
-    else:
-        rows = query_db("SELECT * FROM crowd_log ORDER BY id DESC LIMIT ?", (limit,))
-    return list(reversed(rows))
+    return app
 
 
-@app.get("/snapshot")
-async def snapshot():
-    if latest_frame is not None:
-        return Response(content=latest_frame, media_type="image/jpeg",
-                        headers={"Cache-Control": "no-cache"})
-    return Response(status_code=204)
+app = _make_app()
 
 
-@app.websocket("/ws")
-async def websocket_endpoint(websocket: WebSocket):
-    await websocket.accept()
-    last_id = 0
-    rows = query_db("SELECT * FROM crowd_log ORDER BY id DESC LIMIT 300")
-    rows = list(reversed(rows))
-    if rows:
-        last_id = rows[-1]["id"]
-        await websocket.send_text(json.dumps({"type": "init", "rows": rows}))
-    try:
-        while True:
-            await asyncio.sleep(0.5)
-            new_rows = query_db(
-                "SELECT * FROM crowd_log WHERE id > ? ORDER BY id ASC LIMIT 50",
-                (last_id,),
-            )
-            if new_rows:
-                last_id = new_rows[-1]["id"]
-                await websocket.send_text(json.dumps({"type": "update", "rows": new_rows}))
-    except (WebSocketDisconnect, Exception):
-        pass
+def main():
+    import uvicorn
+    uvicorn.run(app, host="127.0.0.1", port=8000)
+
+
+if __name__ == "__main__":
+    main()

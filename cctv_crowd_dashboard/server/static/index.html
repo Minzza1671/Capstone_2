@@ -1,271 +1,210 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>CCTV 군중 대시보드</title>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { background: #0f1117; color: #e2e8f0; font-family: 'Segoe UI', sans-serif; padding: 24px; }
-
-    h1 { font-size: 1.4rem; font-weight: 600; color: #94a3b8; margin-bottom: 24px; letter-spacing: 0.05em; }
-
-    .layout { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
-
-    .video-panel {
-      background: #1e2130; border-radius: 12px; border: 1px solid #2d3148;
-      overflow: hidden; display: flex; flex-direction: column;
-    }
-    .video-panel .panel-title {
-      font-size: 0.75rem; color: #64748b; text-transform: uppercase;
-      letter-spacing: 0.08em; padding: 12px 16px; border-bottom: 1px solid #2d3148;
-    }
-    .video-panel img { width: 100%; display: block; background: #0f1117; min-height: 240px; }
-    .video-panel .no-feed {
-      display: flex; align-items: center; justify-content: center;
-      min-height: 240px; color: #334155; font-size: 0.85rem;
-    }
-
-    .dashboard { display: flex; flex-direction: column; gap: 16px; }
-
-    .cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
-
-    .card {
-      background: #1e2130; border-radius: 12px; padding: 16px; border: 1px solid #2d3148;
-    }
-    .card .label { font-size: 0.7rem; color: #64748b; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 6px; }
-    .card .value { font-size: 1.8rem; font-weight: 700; color: #f1f5f9; }
-    .card .value.small { font-size: 1.2rem; }
-
-    .status-bar {
-      display: flex; align-items: center; gap: 12px;
-      background: #1e2130; border-radius: 12px; padding: 14px 20px; border: 1px solid #2d3148;
-    }
-    .status-dot { width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0; }
-    .status-label { font-size: 0.8rem; color: #64748b; text-transform: uppercase; letter-spacing: 0.08em; }
-    .status-value { font-size: 1rem; font-weight: 600; margin-left: 4px; }
-    .status-score { font-size: 0.8rem; color: #64748b; margin-left: auto; }
-    .status-override {
-      font-size: 0.7rem; font-weight: 600; color: #fca5a5;
-      background: #7f1d1d44; border: 1px solid #ef444466;
-      padding: 3px 8px; border-radius: 6px; margin-left: 12px; display: none;
-    }
-    .status-override.active { display: inline-block; }
-
-    .status-NORMAL   .status-dot { background: #22c55e; box-shadow: 0 0 8px #22c55e88; }
-    .status-NORMAL   .status-value { color: #22c55e; }
-    .status-CAUTION  .status-dot { background: #84cc16; box-shadow: 0 0 8px #84cc1688; }
-    .status-CAUTION  .status-value { color: #84cc16; }
-    .status-WARNING  .status-dot { background: #f59e0b; box-shadow: 0 0 8px #f59e0b88; }
-    .status-WARNING  .status-value { color: #f59e0b; }
-    .status-DANGER   .status-dot { background: #ef4444; box-shadow: 0 0 8px #ef444488; }
-    .status-DANGER   .status-value { color: #ef4444; }
-    .status-CRITICAL .status-dot { background: #7c3aed; box-shadow: 0 0 8px #7c3aed88; animation: pulse 1s infinite; }
-    .status-CRITICAL .status-value { color: #7c3aed; }
-
-    @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
-
-    .chart-box {
-      background: #1e2130; border-radius: 12px; padding: 20px; border: 1px solid #2d3148; flex: 1;
-    }
-    .chart-box h2 { font-size: 0.75rem; color: #64748b; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 14px; }
-
-    .conn-status { position: fixed; top: 16px; right: 24px; font-size: 0.75rem; color: #64748b; }
-    .conn-status.connected { color: #22c55e; }
-    .conn-status.disconnected { color: #ef4444; }
-
-    @media (max-width: 900px) {
-      .layout { grid-template-columns: 1fr; }
-      .cards { grid-template-columns: repeat(2, 1fr); }
-    }
-  </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Crowd Risk Dashboard</title>
+<script src="/static/chart.min.js"></script>
+<style>
+  :root { --bg:#0e1116; --panel:#161b22; --line:#2a313c; --txt:#e6edf3; --dim:#8b949e; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--txt);
+         font-family:system-ui,'Segoe UI',sans-serif; }
+  header { padding:12px 20px; border-bottom:1px solid var(--line);
+           display:flex; align-items:center; gap:16px; }
+  header h1 { font-size:18px; margin:0; font-weight:600; }
+  #conn { font-size:12px; color:var(--dim); }
+  .wrap { display:grid; grid-template-columns:1.4fr 1fr; gap:16px; padding:16px; }
+  .panel { background:var(--panel); border:1px solid var(--line);
+           border-radius:10px; padding:14px; }
+  .cctv img { width:100%; border-radius:8px; display:block; background:#000; }
+  .cctv .cap { font-size:12px; color:var(--dim); margin-top:6px; }
+  #badge { font-size:42px; font-weight:800; letter-spacing:2px; text-align:center;
+           padding:18px; border-radius:10px; transition:all .3s; }
+  .metrics { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:14px; }
+  .metric { background:#0e1116; border:1px solid var(--line); border-radius:8px; padding:10px 12px; }
+  .metric .k { font-size:12px; color:var(--dim); }
+  .metric .v { font-size:24px; font-weight:700; margin-top:2px; }
+  .metric .u { font-size:12px; color:var(--dim); font-weight:400; }
+  .sub { display:flex; gap:8px; margin-top:12px; flex-wrap:wrap; }
+  .chip { font-size:11px; padding:3px 8px; border-radius:999px; border:1px solid var(--line); }
+  .flag { font-size:11px; color:#ffae57; margin-top:8px; min-height:14px; }
+  .chartbox { grid-column:1 / -1; }
+  h2 { font-size:13px; color:var(--dim); margin:0 0 10px; font-weight:600;
+       text-transform:uppercase; letter-spacing:1px; }
+</style>
 </head>
 <body>
-  <div class="conn-status disconnected" id="conn">● 연결 중...</div>
+<header>
+  <h1>🚨 Crowd Risk Dashboard</h1>
+  <span id="conn">● 연결 중…</span>
+  <span id="cam" style="margin-left:auto;color:var(--dim);font-size:13px"></span>
+</header>
 
-  <h1>CCTV 군중 모니터링</h1>
-
-  <div class="layout">
-    <div class="video-panel">
-      <div class="panel-title">라이브 영상</div>
-      <img id="video-feed" alt="video feed" style="min-height:240px;" />
-      <div class="no-feed" id="no-feed" style="display:none;">분석기 대기 중...</div>
-    </div>
-
-    <div class="dashboard">
-      <div class="status-bar status-NORMAL" id="status-bar">
-        <div class="status-dot"></div>
-        <span class="status-label">위험도</span>
-        <span class="status-value" id="risk-level">NORMAL</span>
-        <span class="status-override" id="risk-override"></span>
-        <span class="status-score" id="risk-score">score: —</span>
-      </div>
-
-      <div class="cards">
-        <div class="card">
-          <div class="label">현재 인원</div>
-          <div class="value" id="val-persons">—</div>
-        </div>
-        <div class="card">
-          <div class="label">밀도 (명/㎡)</div>
-          <div class="value small" id="val-density">—</div>
-        </div>
-        <div class="card">
-          <div class="label">흐름 강도</div>
-          <div class="value" id="val-flow">—</div>
-        </div>
-        <div class="card">
-          <div class="label">위험 점수</div>
-          <div class="value small" id="val-riskscore">—</div>
-        </div>
-      </div>
-
-      <div class="chart-box">
-        <h2>ROI 인원 수 추이</h2>
-        <canvas id="chart"></canvas>
-      </div>
-    </div>
+<div class="wrap">
+  <div class="panel cctv">
+    <h2>CCTV — 시각 위험 레이어</h2>
+    <img id="stream" src="/stream" alt="stream">
+    <div class="cap">실시간 영상 + 위험등급/밀도 핫스팟 (수치는 우측 패널)</div>
   </div>
 
-  <script>
-    const MAX_POINTS = 300;
-    const labels = [], personData = [];
+  <div class="panel">
+    <h2>현재 위험도</h2>
+    <div id="badge" style="background:#1b2129;color:#8b949e">—</div>
+    <div class="metrics">
+      <div class="metric"><div class="k">전역 밀도</div>
+        <div class="v"><span id="gd">0.00</span><span class="u"> 명/㎡</span></div></div>
+      <div class="metric"><div class="k">국소 밀도 (kNN)</div>
+        <div class="v"><span id="ld">0.00</span><span class="u"> 명/㎡</span></div></div>
+      <div class="metric"><div class="k">평균 속도</div>
+        <div class="v"><span id="sp">0.00</span><span class="u"> m/s</span></div></div>
+      <div class="metric"><div class="k">ROI 인원</div>
+        <div class="v"><span id="cnt">0</span><span class="u"> 명</span></div></div>
+    </div>
+    <div class="sub">
+      <span class="chip">전역 <b id="lg">–</b></span>
+      <span class="chip">국소 <b id="ll">–</b></span>
+      <span class="chip">속도 <b id="lw">–</b></span>
+    </div>
+    <div class="flag" id="flag"></div>
+  </div>
 
-    const ctx = document.getElementById('chart').getContext('2d');
-    const chart = new Chart(ctx, {
-      type: 'line',
-      data: {
-        labels,
-        datasets: [{
-          label: '인원 수',
-          data: personData,
-          borderColor: '#6366f1',
-          backgroundColor: '#6366f120',
-          borderWidth: 2,
-          pointRadius: 0,
-          fill: true,
-          tension: 0.3,
-        }]
+  <div class="panel chartbox">
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:10px">
+      <h2 style="margin:0">밀도 추세 (명/㎡)</h2>
+      <span id="rate" class="chip" style="font-size:13px">10초 Δ —</span>
+      <span style="margin-left:auto;font-size:11px;color:var(--dim)">
+        ■ 국소밀도(kNN)  ┄ 전역밀도  ─ 임계 3.2 DANGER / 4.0 CRITICAL</span>
+    </div>
+    <canvas id="chart" height="90"></canvas>
+  </div>
+</div>
+
+<script>
+const COLORS = {
+  NORMAL:"#00c800", CAUTION:"#ffd000", WARNING:"#ffa500",
+  DANGER:"#ff5000", CRITICAL:"#ff0000"
+};
+const MAXPTS = 120;
+
+// 등급 밴드(배경) + 임계선 — 밀도축에 위험 구간을 색으로 표시.
+const BANDS = [  // [하한, 상한, 등급]  (명/㎡, margin 적용 임계)
+  [0,1.6,'NORMAL'],[1.6,2.4,'CAUTION'],[2.4,3.2,'WARNING'],
+  [3.2,4.0,'DANGER'],[4.0,99,'CRITICAL']
+];
+const zonePlugin = {
+  id:'zones',
+  beforeDraw(chart){
+    const {ctx, chartArea:{left,right,top,bottom}, scales:{y}} = chart;
+    if(!y) return;
+    ctx.save();
+    for(const [lo,hi,lv] of BANDS){
+      let yhi=y.getPixelForValue(Math.min(hi,y.max));
+      let ylo=y.getPixelForValue(Math.max(lo,y.min));
+      yhi=Math.max(yhi,top); ylo=Math.min(ylo,bottom);
+      if(ylo<=yhi) continue;
+      ctx.fillStyle=COLORS[lv]+'22';
+      ctx.fillRect(left,yhi,right-left,ylo-yhi);
+    }
+    for(const [v,c] of [[3.2,'#ff5000'],[4.0,'#ff0000']]){
+      const yp=y.getPixelForValue(v);
+      if(yp<top||yp>bottom) continue;
+      ctx.strokeStyle=c; ctx.lineWidth=1; ctx.setLineDash([5,4]);
+      ctx.beginPath(); ctx.moveTo(left,yp); ctx.lineTo(right,yp); ctx.stroke();
+    }
+    ctx.restore();
+  }
+};
+
+// 차트 생성은 try로 격리 — Chart.js 로드 실패해도 WS/수치는 계속 작동.
+let chart = null;
+try {
+  if (typeof Chart === "undefined") throw new Error("Chart.js 미로드");
+  chart = new Chart(document.getElementById('chart'), {
+    type:'line',
+    data:{ labels:[], datasets:[
+      { label:'국소밀도', data:[], borderColor:'#ff4d4d', borderWidth:2.5,
+        backgroundColor:'rgba(255,77,77,.08)', fill:true, tension:.3, pointRadius:0 },
+      { label:'전역밀도', data:[], borderColor:'#58a6ff', borderWidth:1,
+        borderDash:[4,3], tension:.3, pointRadius:0 },
+    ]},
+    options:{ animation:false, responsive:true,
+      scales:{
+        x:{ ticks:{ color:'#8b949e', maxTicksLimit:8 }, grid:{ color:'#2a313c' } },
+        y:{ min:0, suggestedMax:5, title:{display:true,text:'명/㎡',color:'#8b949e'},
+            ticks:{ color:'#8b949e' }, grid:{ color:'#2a313c' } },
       },
-      options: {
-        animation: false,
-        responsive: true,
-        plugins: { legend: { display: false } },
-        scales: {
-          x: { display: false },
-          y: { min: 0, ticks: { color: '#64748b' }, grid: { color: '#2d3148' } }
-        }
-      }
-    });
+      plugins:{ legend:{ display:false } } },
+    plugins:[zonePlugin]
+  });
+} catch(e) {
+  console.error("chart init 실패:", e);
+}
 
-    function updateUI(rows) {
-      if (!rows.length) return;
-      const latest = rows[rows.length - 1];
+const hist = [];  // {ts, l} 변화율 계산용
 
-      document.getElementById('val-persons').textContent = latest.roi_person_count ?? '—';
+function fmt(n,d=2){ return (n??0).toFixed(d); }
 
-      const density = latest.density_per_m2;
-      document.getElementById('val-density').textContent =
-        (density && density > 0) ? density.toFixed(2) : '—';
+function update(r){
+  const lvl = r.risk_level || "NORMAL";
+  const c = COLORS[lvl] || "#8b949e";
+  const badge = document.getElementById('badge');
+  badge.textContent = lvl;
+  badge.style.background = c + "22";
+  badge.style.color = c;
+  badge.style.boxShadow = (lvl==="DANGER"||lvl==="CRITICAL") ? `0 0 24px ${c}88` : "none";
 
-      document.getElementById('val-flow').textContent = latest.flow_imbalance ?? '—';
+  document.getElementById('gd').textContent = fmt(r.global_density);
+  document.getElementById('ld').textContent = fmt(r.local_max_density);
+  document.getElementById('sp').textContent = fmt(r.mean_speed);
+  document.getElementById('cnt').textContent = r.roi_person_count ?? 0;
+  document.getElementById('lg').textContent = r.global_level || "–";
+  document.getElementById('ll').textContent = r.local_level || "–";
+  document.getElementById('lw').textContent = r.weidmann_level || "–";
+  document.getElementById('cam').textContent = r.camera_id ? ("cam: "+r.camera_id) : "";
+  document.getElementById('flag').textContent =
+    (r.local_reliable === false) ? "⚠ 국소밀도 신뢰불가(인원<9) → 전역밀도 대체" : "";
 
-      const score = latest.risk_score;
-      document.getElementById('val-riskscore').textContent =
-        score != null ? score.toFixed(3) : '—';
-
-      const level = latest.risk_level || 'NORMAL';
-      document.getElementById('risk-level').textContent = level;
-      document.getElementById('risk-score').textContent =
-        score != null ? `score: ${score.toFixed(2)}` : 'score: —';
-      document.getElementById('status-bar').className = `status-bar status-${level}`;
-
-      // 밀도 override 표시: density 룰 등급이 가중합 등급보다 높아 강제될 때
-      const LEVELS = ['NORMAL', 'CAUTION', 'WARNING', 'DANGER', 'CRITICAL'];
-      const overrideEl = document.getElementById('risk-override');
-      const sLv = latest.score_level, dLv = latest.density_level;
-      if (sLv && dLv && LEVELS.indexOf(dLv) > LEVELS.indexOf(sLv)) {
-        overrideEl.textContent = `⚠ 밀도 강제 (가중 ${sLv})`;
-        overrideEl.classList.add('active');
-      } else {
-        overrideEl.classList.remove('active');
-      }
+  const now = r.ts ? r.ts : Date.now()/1000;
+  const localD = r.local_max_density ?? 0;
+  if (chart){
+    const t = new Date(now*1000).toLocaleTimeString('ko-KR');
+    const ch = chart.data;
+    ch.labels.push(t);
+    ch.datasets[0].data.push(localD);
+    ch.datasets[1].data.push(r.global_density ?? 0);
+    if (ch.labels.length > MAXPTS){
+      ch.labels.shift(); ch.datasets.forEach(d=>d.data.shift());
     }
+    chart.update();
+  }
 
-    function appendRows(rows) {
-      for (const row of rows) {
-        labels.push(row.frame_index);
-        personData.push(row.roi_person_count);
-      }
-      if (labels.length > MAX_POINTS) {
-        labels.splice(0, labels.length - MAX_POINTS);
-        personData.splice(0, personData.length - MAX_POINTS);
-      }
-      chart.update('none');
-    }
+  // 변화율: 최근 10초 국소밀도 Δ (압사는 레벨보다 급증 속도가 전조)
+  hist.push({ts:now, l:localD});
+  while (hist.length && hist[0].ts < now - 30) hist.shift();
+  const past = hist.find(h => h.ts >= now - 10) || hist[0];
+  const d = localD - (past ? past.l : localD);
+  const rateChip = document.getElementById('rate');
+  const arrow = d > 0.3 ? "▲▲" : d > 0.05 ? "▲" : d < -0.3 ? "▼▼" : d < -0.05 ? "▼" : "—";
+  const col = d > 0.3 ? "#ff5000" : d > 0.05 ? "#ffd000" : d < -0.05 ? "#00c800" : "#8b949e";
+  rateChip.textContent = `10초 Δ ${d>=0?"+":""}${d.toFixed(1)} 명/㎡ ${arrow}`;
+  rateChip.style.color = col;
+  rateChip.style.borderColor = col;
+}
 
-    const allRows = [];
-
-    function connect() {
-      const ws = new WebSocket(`ws://${location.host}/ws`);
-      const connEl = document.getElementById('conn');
-
-      ws.onopen = () => {
-        connEl.textContent = '● 연결됨';
-        connEl.className = 'conn-status connected';
-      };
-
-      ws.onmessage = (e) => {
-        const msg = JSON.parse(e.data);
-        if (msg.type === 'init') {
-          allRows.length = 0; labels.length = 0; personData.length = 0;
-          allRows.push(...msg.rows);
-          appendRows(msg.rows);
-        } else if (msg.type === 'update') {
-          allRows.push(...msg.rows);
-          if (allRows.length > MAX_POINTS) allRows.splice(0, allRows.length - MAX_POINTS);
-          appendRows(msg.rows);
-        }
-        updateUI(allRows);
-      };
-
-      ws.onclose = () => {
-        connEl.textContent = '● 연결 끊김 — 재시도 중...';
-        connEl.className = 'conn-status disconnected';
-        setTimeout(connect, 2000);
-      };
-    }
-
-    connect();
-
-    // 영상 폴링 (100ms) — blob URL로 이중 fetch 방지
-    const videoEl = document.getElementById('video-feed');
-    const noFeedEl = document.getElementById('no-feed');
-    let videoFails = 0;
-    setInterval(() => {
-      fetch('/snapshot?' + Date.now())
-        .then(r => {
-          if (r.status === 200) return r.blob();
-          return null;
-        })
-        .then(blob => {
-          if (blob && blob.size > 0) {
-            const prev = videoEl.src;
-            videoEl.src = URL.createObjectURL(blob);
-            if (prev.startsWith('blob:')) URL.revokeObjectURL(prev);
-            videoEl.style.display = 'block';
-            noFeedEl.style.display = 'none';
-            videoFails = 0;
-          } else {
-            if (++videoFails > 30) {
-              videoEl.style.display = 'none';
-              noFeedEl.style.display = 'flex';
-            }
-          }
-        })
-        .catch(() => { videoFails++; });
-    }, 100);
-  </script>
+let ws;
+function connect(){
+  const proto = location.protocol === "https:" ? "wss" : "ws";
+  ws = new WebSocket(`${proto}://${location.host}/ws`);
+  const conn = document.getElementById('conn');
+  ws.onopen = ()=>{ conn.textContent="● 연결됨"; conn.style.color="#00c800"; };
+  ws.onmessage = e=>{ try{ update(JSON.parse(e.data)); }catch(_){} };
+  ws.onclose = ()=>{ conn.textContent="● 끊김 — 재연결"; conn.style.color="#ff5000";
+                     setTimeout(connect, 1500); };
+  ws.onerror = ()=> ws.close();
+}
+connect();
+setInterval(()=>{ if(ws && ws.readyState===1) ws.send("ping"); }, 10000);
+</script>
 </body>
 </html>

@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -c \"import ast; ast.parse\\(open\\('analyzer/analyzer.py',encoding='utf-8'\\).read\\(\\)\\); print\\('analyzer.py syntax OK'\\)\")",
+      "Bash(python -c \"from analyzer.modules.roi_manager import ROIManager; print\\('roi_manager import OK'\\)\")",
+      "Bash(python -c ' *)",
+      "Bash(python -c \"import fastapi, uvicorn; print\\('fastapi',fastapi.__version__,'uvicorn ok'\\)\")",
+      "Bash(python -c \"import py_compile; py_compile.compile\\('server/main.py',doraise=True\\); print\\('compile OK'\\)\")",
+      "Bash(python -c \"from server.main import app; print\\('import OK, routes:', [r.path for r in app.routes if hasattr\\(r,'path'\\)]\\)\")",
+      "Bash(python -m server.main)",
+      "Bash(taskkill //F //IM python.exe)"
+    ]
+  }
+}

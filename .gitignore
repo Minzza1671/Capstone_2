@@ -5,7 +5,9 @@ __pycache__/
 *.pyd
 
 # 분석 출력물
-cctv_crowd_dashboard(2)/cctv_crowd_dashboard(2)/analyzer/outputs/
+cctv_crowd_dashboard/analyzer/outputs/
+*.db
+*.egg-info/
 
 # 모델 파일 (용량 큼)
 *.pt
