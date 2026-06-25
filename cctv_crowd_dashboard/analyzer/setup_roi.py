@@ -95,10 +95,9 @@ def calibrate_homography(frame, max_display_width: int = 1280):
     바닥평면 기준점 4개 이상을 클릭받고, 각 점의 실세계 좌표(m)를 콘솔 입력받아
     homography(3x3, 픽셀→바닥평면 m)를 계산한다.
 
-    Returns (H_list, pixel_pts) 또는 취소 시 (None, None).
     """
     print("\n[STEP 2/2] Homography 보정")
-    print("[INFO] 바닥평면 기준점 4개 이상 클릭 (직사각형 모서리 권장).")
+    print("[INFO] 바닥평면 기준점 4개 이상 클릭.")
     print("[INFO] Enter: 확정 / R: 리셋 / ESC: 취소")
 
     editor = _ClickEditor(frame, "Step 2/2 - Homography", (255, 0, 0), max_display_width)
@@ -107,7 +106,6 @@ def calibrate_homography(frame, max_display_width: int = 1280):
         return None, None
 
     print(f"\n[INPUT] 클릭한 {len(editor.points)}개 점의 실세계 좌표(m)를 입력하세요.")
-    print("[INFO] 한 점이 원점(0,0), 한 축 방향이 양수가 되게 잡으면 편함.")
     world = []
     for i, px in enumerate(editor.points):
         while True:
@@ -169,7 +167,6 @@ def run_roi_editor_on_frame(
     print(f"[INFO] ROI output: {output}")
 
     print("\n[STEP 1/2] ROI 폴리곤")
-    print("[INFO] ROI 꼭짓점 3개 이상 클릭. Enter: 확정 / R: 리셋 / ESC: 취소")
     roi_editor = _ClickEditor(frame, "Step 1/2 - ROI Setup", (0, 255, 255),
                               max_display_width)
     if not roi_editor.collect(min_points=3):
@@ -183,7 +180,7 @@ def run_roi_editor_on_frame(
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--video", default=str(PROJECT_ROOT / "data" / "sibuya.mp4"),
+    parser.add_argument("--video", default=str(PROJECT_ROOT / "data" / "sibuya_test.mp4"),
                         help="Path to input video")
     parser.add_argument("--output", default=None,
                         help="ROI config path. 기본 analyzer/configs/{video_stem}_roi.json")

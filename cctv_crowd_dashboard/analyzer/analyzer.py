@@ -59,7 +59,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser()
     parser.add_argument("--p2p-model", default=str(PROJECT_ROOT / "models" / "best_mae.pth"))
     parser.add_argument("--p2p-threshold", type=float, default=0.50)
-    parser.add_argument("--video", default=str(PROJECT_ROOT / "data" / "test.mp4"))
+    parser.add_argument("--video", default=str(PROJECT_ROOT / "data" / "sibuya_test.mp4"))
     parser.add_argument("--camera-id", default="cam_001")
     parser.add_argument("--roi", default=None)
     parser.add_argument("--max-frames", type=int, default=0)
