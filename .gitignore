@@ -12,7 +12,8 @@ cctv_crowd_dashboard/analyzer/outputs/
 # 모델 파일 (용량 큼)
 *.pt
 
-# 영상 파일
+# 영상 파일 (기본 제외, 샘플 1개만 예외 허용)
 *.mp4
 *.avi
 *.mov
+!cctv_crowd_dashboard/data/sibuya_test.mp4
