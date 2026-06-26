@@ -15,7 +15,7 @@ P2PNet(인원 카운팅) + Optical Flow(흐름) + Risk Engine(Green Guide/kNN/We
 
 ```
 1) git clone <이 저장소>
-2) setup.bat          더블클릭  → 가상환경 + 의존성 설치 (최초 1회, GPU 자동 감지)
+2) setup.bat          실행  → 가상환경 + 의존성 설치 (최초 1회, GPU 자동 감지)
 3) 영상 준비          cctv_crowd_dashboard\data\ 에 .mp4 넣기 (예: sibuya_test.mp4)
 4) run_setup_roi.bat  --video data\내영상.mp4   
     → 관심영역(ROI) 마우스로 그리기
