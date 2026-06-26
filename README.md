@@ -1,4 +1,4 @@
-# 압사위험 감지 시스템 (Crowd Management System)
+# 인파 밀집 구간 감지 시스템
 
 CCTV 영상에서 군중 밀도/흐름을 분석해 압사 위험을 감지하는 시스템.
 P2PNet(인원 카운팅) + Optical Flow(흐름) + Risk Engine(Green Guide/kNN/Weidmann).
@@ -6,7 +6,7 @@ P2PNet(인원 카운팅) + Optical Flow(흐름) + Risk Engine(Green Guide/kNN/We
 ## 시연 영상
 
 ▶ **[YouTube 시연 영상 보기](https://youtu.be/MwY7M_0E2vY)**
-
+W
 > 샘플 영상(`cctv_crowd_dashboard/data/sibuya_test.mp4`, 22MB)은 저장소에 포함되어 바로 실행 가능.
 
 ## 빠른 시작 (Windows)
