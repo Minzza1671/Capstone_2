@@ -4,9 +4,19 @@ setlocal
 cd /d %~dp0
 
 echo [1/4] Python 가상환경 생성...
-python -m venv venv
+REM py 런처로 3.12 우선, 없으면 3.11 사용 (PATH 첫 python 버전 꼬임 방지)
+set "PYLAUNCH="
+py -3.12 --version >nul 2>&1 && set "PYLAUNCH=py -3.12"
+if not defined PYLAUNCH py -3.11 --version >nul 2>&1 && set "PYLAUNCH=py -3.11"
+if not defined PYLAUNCH (
+  echo [ERROR] Python 3.11 또는 3.12 필요. https://www.python.org/downloads/ 에서 설치.
+  echo         설치 후 'py -3.12 --version' 확인.
+  pause & exit /b 1
+)
+echo [INFO] 사용 Python: %PYLAUNCH%
+%PYLAUNCH% -m venv venv
 if errorlevel 1 (
-  echo [ERROR] Python 3.10+ 필요. python --version 확인.
+  echo [ERROR] venv 생성 실패.
   pause & exit /b 1
 )
 

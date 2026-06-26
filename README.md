@@ -11,7 +11,7 @@ P2PNet(인원 카운팅) + Optical Flow(흐름) + Risk Engine(Green Guide/kNN/We
 
 ## 빠른 시작 (Windows)
 
-전제: **Python 3.10~3.12** 설치 ([python.org](https://www.python.org/downloads/), 설치 시 "Add to PATH" 체크).
+전제: **Python 3.11~3.12** 설치 ([python.org](https://www.python.org/downloads/), 설치 시 "Add to PATH" 체크).
 
 ```
 1) git clone <이 저장소>
@@ -46,7 +46,7 @@ P2PNet(인원 카운팅) + Optical Flow(흐름) + Risk Engine(Green Guide/kNN/We
 ## 수동 실행 (bat 없이)
 
 ```bash
-python -m venv venv
+py -3.12 -m venv venv          REM 3.12 없으면 py -3.11
 venv\Scripts\activate
 pip install torch==2.12.0 torchvision==0.27.0 --index-url https://download.pytorch.org/whl/cu126
 pip install -r requirements.txt
