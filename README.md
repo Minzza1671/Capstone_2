@@ -9,6 +9,13 @@ P2PNet(인원 카운팅) + Optical Flow(흐름) + Risk Engine(Green Guide/kNN/We
 
 > 샘플 영상(`cctv_crowd_dashboard/data/sibuya_test.mp4`, 22MB)은 저장소에 포함되어 바로 실행 가능.
 
+## 데이터셋
+
+학습 사진이 많아 원본 출처 링크로 대체.
+
+- **ShanghaiTech** — https://www.kaggle.com/datasets/tthien/shanghaitech
+- **Crowd Counting Dataset** — http://www.crowd-counting.com/#download
+
 ## 빠른 시작 (Windows)
 
 전제: **Python 3.11~3.12** 설치 ([python.org](https://www.python.org/downloads/), 설치 시 "Add to PATH" 체크).
