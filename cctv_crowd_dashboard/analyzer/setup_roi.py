@@ -106,6 +106,7 @@ def calibrate_homography(frame, max_display_width: int = 1280):
         return None, None
 
     print(f"\n[INPUT] 클릭한 {len(editor.points)}개 점의 실세계 좌표(m)를 입력하세요.")
+    print("[예시] 바닥 직사각형이면: 0 0  /  5 0  /  5 10  /  0 10  (가로5m·세로10m)")
     world = []
     for i, px in enumerate(editor.points):
         while True:
